@@ -9,7 +9,7 @@ This repo is both a **clone-and-go starter kit** and a **documented reference**.
 ## Quick Start
 
 ```bash
-git clone https://github.com/err2x/claude-code-starter-kit.git
+git clone https://github.com/genereda/claude-code-starter-kit.git
 cd claude-code-starter-kit
 bash install.sh
 ```

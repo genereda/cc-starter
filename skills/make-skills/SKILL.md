@@ -1,26 +1,41 @@
 ---
 name: make-skills
 description: >-
-  Create high-quality Claude Code skills with optimal structure, triggering descriptions, and best practices. Use when writing SKILL.md files, creating new skills, designing skill architecture, or helping with skill development and refinement.
+  Create high-quality Claude Code skills with optimal structure, triggering
+  descriptions, and best practices. Use when writing SKILL.md files, creating
+  new skills, designing skill architecture, helping with skill development and
+  refinement, or optimizing an existing skill's description for better
+  triggering accuracy.
 ---
 
 # Skill Creation Guide
 
-## Why This Exists
-
-Skills transform Claude from a general-purpose model into a domain expert with procedural knowledge. A well-crafted skill loads only when needed, costs minimal context, and reliably triggers on relevant requests. This guide encodes the patterns that make skills effective.
-
-## Quick Start
+## Skill Structure
 
 ```
 skill-name/
 ├── SKILL.md          # Required - instructions Claude follows
-├── scripts/          # Optional - executable code (deterministic, reusable)
+├── scripts/          # Optional - executable code (runs without loading into context)
 ├── references/       # Optional - documentation loaded contextually
 └── assets/           # Optional - output templates, not loaded into context
 ```
 
-## THE EXACT FRONTMATTER
+Three-level loading: (1) name + description are always in context (~100 words), (2) SKILL.md body loads when triggered (<500 lines ideal), (3) bundled resources load on demand (unlimited). Design for this hierarchy.
+
+## Step 1: Capture Intent
+
+Before writing anything, understand what the skill needs to do. Ask the user:
+
+1. What should this skill enable Claude to do?
+2. When should it trigger? (phrases, contexts, file types)
+3. What's the expected output format?
+4. Are test cases appropriate? (yes for verifiable outputs like file transforms, code generation; no for subjective outputs like writing style)
+
+Proactively ask about edge cases, input/output formats, and success criteria. Don't assume — ask.
+
+## Step 2: Write the SKILL.md
+
+### Frontmatter
 
 ```yaml
 ---
@@ -31,245 +46,103 @@ description: >-
 ---
 ```
 
-**Validation:**
-- `name`: ≤64 characters, lowercase, hyphens only, no reserved terms
-- `description`: ≤1024 characters, third-person active voice, no XML tags
+- `name`: ≤64 chars, lowercase, hyphens only, gerund form preferred (e.g., `processing-pdfs`, `analyzing-data`)
+- `description`: ≤1024 chars, third-person active voice, no XML tags
 
-## Writing Effective Descriptions (Critical)
+### Writing Effective Descriptions (Critical)
 
-The description is the triggering mechanism. Claude uses it to select from potentially 100+ skills.
-
-### Rules
+The description is the triggering mechanism. Claude selects from potentially 100+ skills based on it.
 
 1. **Third person always:** "Processes Excel files" not "I can help you"
 2. **Specific actions + trigger phrases:** What it does AND when to invoke
 3. **Discoverable terminology:** Include synonyms users might say
+4. **Be pushy about triggering.** Claude tends to undertrigger — it won't invoke a skill unless the description clearly matches. Err on the side of listing more trigger contexts, even tangential ones. Example: instead of "Build dashboards for internal data", write "Build dashboards for internal data. Use when the user mentions dashboards, data visualization, internal metrics, charts, or wants to display any kind of data, even if they don't explicitly ask for a 'dashboard.'"
 
-### Strong Examples
+**Strong examples:**
 
 > "Analyze Excel spreadsheets, create pivot tables, generate charts. Use when analyzing Excel files, spreadsheets, tabular data, or .xlsx files."
 
 > "Generate descriptive commit messages by analyzing git diffs. Use when user asks for help writing commit messages or reviewing staged changes."
 
-### Weak Examples (Never Do This)
+### Writing the Body
 
-- "Helps with documents" (too vague, never triggers)
-- "Processes data" (what data? how?)
-- "Does stuff with files" (useless)
+**Conciseness is survival.** Every line of a skill loads into context on every invocation — this is a recurring cost. For each line ask: "Does Claude already know this?" If yes, cut it. A 200-line skill that triggers 1000 times costs 200K lines of context. A 150-line skill that's equally effective saves 50K.
 
-## Core Principles
+**Explain the why, not just the what.** Modern models respond better to reasoning than rigid rules. If you find yourself writing ALWAYS or NEVER in all caps, reframe: explain _why_ the thing matters so the model can generalize to edge cases. Theory of mind beats rote instructions.
 
-### 1. Conciseness is Survival
+**Match specificity to fragility.** Be prescriptive for error-prone or consistency-critical steps. Be flexible for creative or multi-approach tasks.
 
-Context window is shared. Claude is already intelligent—only document what it doesn't inherently know.
+**Use progressive disclosure.** Keep SKILL.md under 500 lines. Move detailed docs to `references/` with clear pointers. Keep references one level deep (no chains). Include a table of contents for reference files >100 lines.
 
-**Bad** (~150 tokens):
-> "PDF (Portable Document Format) files are a common file format that contains text, images..."
+**Workflow patterns:** For multi-step, quality-critical, template-based, or conditional workflows, see [references/workflow-patterns.md](references/workflow-patterns.md).
 
-**Good** (~50 tokens):
-> "Use pdfplumber for extraction: `[code example]`"
+**Always use fully qualified MCP tool names** (e.g., `BigQuery:bigquery_schema`, not just `bigquery_schema`).
 
-Challenge each line: Does Claude need this? Does it justify its token cost?
+## Step 3: Test and Iterate
 
-### 2. Progressive Disclosure
+After drafting, create 2-3 realistic test prompts — things a real user would actually say. Run them against the skill:
 
-Never front-load everything. Structure for on-demand loading.
+1. **Does it trigger?** If not, the description needs more/better trigger phrases
+2. **Does it produce the right output?** If not, refine instructions
+3. **Does it waste effort?** Read the transcript, not just the output — if the skill makes the model do unproductive work, cut those instructions
 
-```markdown
-## Quick start
-[Essential example - <50 lines]
+**Bundled script detection:** If test runs independently produce similar helper scripts, that's a signal to bundle the script into `scripts/` so every future invocation doesn't reinvent it.
 
-## Features
-- **Feature A**: See [references/A.md](references/A.md)
-- **Feature B**: See [references/B.md](references/B.md)
-```
+Iterate until the skill reliably triggers and produces good output. Then expand the test set for confidence.
 
-**Rules:**
-- Keep references ONE level deep from SKILL.md (no chains)
-- Include table of contents for files >100 lines
-- Target <500 lines in SKILL.md body
+## Step 4: Token-Cost Review
 
-### 3. Degrees of Freedom
+Before finalizing, do a conciseness pass on the generated skill:
 
-Match specificity to task fragility:
+- Cut lines that teach Claude things it already knows
+- Cut examples that illustrate obvious points
+- Merge sections that repeat similar information
+- Move rarely-needed detail to `references/`
+- Verify the skill body is under 500 lines
 
-| Freedom | When | Example |
-|---------|------|---------|
-| High | Multiple valid approaches | Code review guidelines |
-| Medium | Preferred pattern, variation OK | Report templates |
-| Low | Consistency critical, error-prone | Database migrations |
+This step is especially important because it compounds — every token saved here is saved on every future invocation.
 
-## Workflow Patterns
+## Anti-Patterns
 
-### Checklist Pattern (Multi-Step Tasks)
-
-```markdown
-## Processing workflow
-
-- [ ] Step 1: Analyze input
-- [ ] Step 2: Transform data
-- [ ] Step 3: Validate output
-- [ ] Step 4: Write results
-```
-
-### Feedback Loop Pattern (Quality-Critical)
-
-```markdown
-## Validation loop
-
-1. Make changes
-2. **Validate immediately**: `python scripts/validate.py`
-3. If validation fails → fix → validate again
-4. **Only proceed when validation passes**
-```
-
-### Template Pattern (Consistent Output)
-
-```markdown
-## Output structure
-
-ALWAYS use this template:
-
-## Section 1
-[Content specification]
-
-## Section 2
-[Content specification]
-```
-
-### Conditional Workflow Pattern
-
-```markdown
-## Workflow selection
-
-1. Determine type:
-   - **Creating new?** → Follow "Creation workflow"
-   - **Modifying existing?** → Follow "Modification workflow"
-```
-
-## Bundled Resources
-
-### scripts/ — Executable Code
-
-**When:** Same code repeatedly needed; deterministic reliability required.
-
-```markdown
-## In SKILL.md
-Run `python scripts/validate.py input.pdf` to validate.
-```
-
-Scripts execute without loading into context—token efficient and consistent.
-
-### references/ — Contextual Documentation
-
-**When:** Documentation Claude should reference while working.
-
-```markdown
-## Available guides
-- **API usage**: See [references/api.md](references/api.md)
-- **Error codes**: See [references/errors.md](references/errors.md)
-
-## Quick search
-```bash
-grep -i "keyword" references/
-```
-```
-
-### assets/ — Output Templates
-
-Files used in output, not loaded. Claude copies/modifies as needed.
-
-## Anti-Patterns (Avoid)
-
-| Anti-Pattern | Problem | Solution |
-|--------------|---------|----------|
-| Windows paths (`scripts\file.py`) | Breaks on Unix | Forward slashes only |
-| Deeply nested references | Claude partial-reads | One level deep |
-| Vague descriptions | Never triggers | Specific + trigger phrases |
-| Too many options | Confusing | Default + escape hatch |
-| Inconsistent terminology | Confuses Claude | Pick one term throughout |
-| Time-sensitive info | Becomes wrong | Use collapsed `<details>` |
-| Magic numbers | Unverifiable | Document why each value |
+| Anti-Pattern                      | Problem              | Solution                   |
+| --------------------------------- | -------------------- | -------------------------- |
+| Windows paths (`scripts\file.py`) | Breaks on Unix       | Forward slashes only       |
+| Deeply nested references          | Claude partial-reads | One level deep             |
+| Vague descriptions                | Never triggers       | Specific + trigger phrases |
+| Too many options                  | Confusing            | Default + escape hatch     |
+| Inconsistent terminology          | Confuses Claude      | Pick one term throughout   |
+| Time-sensitive info               | Becomes wrong        | Use collapsed `<details>`  |
+| Magic numbers                     | Unverifiable         | Document why each value    |
 
 **Bad:** "You can use pypdf, or pdfplumber, or PyMuPDF..."
-
 **Good:** "Use pdfplumber for text extraction. For scanned PDFs requiring OCR, use pdf2image with pytesseract instead."
 
 ## Validation
-
-Run the validation script to check for common issues:
 
 ```bash
 python3 scripts/validate_skill.py [path/to/skill]
 ```
 
-**What it checks:**
-- Name format (≤64 chars, lowercase, hyphens only)
-- Description length (≤1024 chars) and quality (third-person, trigger phrases)
-- Body line count (<500 target)
-- Windows paths, nested references, vague patterns
-
-### Manual Checklist
-
-```
-□ Scripts: tested, explicit error handling
-□ Consistent terminology throughout
-□ Examples concrete and copy-paste ready
-```
-
-## Development Process
-
-1. **Complete task without skill** — Note what context you repeatedly provide
-2. **Identify reusable pattern** — What would help future similar tasks?
-3. **Create minimal skill** — Just enough to address gaps
-4. **Test with fresh instance** — Does it trigger? Apply rules correctly?
-5. **Iterate** — What did it miss? What confused it?
-
-## Naming Conventions
-
-Use gerund form (verb + -ing):
-
-**Good:** `processing-pdfs`, `analyzing-data`, `testing-code`, `managing-config`
-
-**Bad:** `helper`, `utils`, `tools`, `documents`, `my-stuff`
+Checks: name format, description length/quality, body line count, Windows paths, nested references, vague patterns.
 
 ## Optional Frontmatter Fields
 
-| Field | Effect |
-|-------|--------|
-| `allowed-tools` | Scoped permissions: `Read,Write,Bash(git:*)` |
-| `user-invocable: false` | Hide from slash menu |
-
-## MCP Tool References
-
-Always use fully qualified names:
-
-**Good:** "Use the `BigQuery:bigquery_schema` tool"
-
-**Bad:** "Use the bigquery_schema tool"
+| Field                   | Effect                                       |
+| ----------------------- | -------------------------------------------- |
+| `allowed-tools`         | Scoped permissions: `Read,Write,Bash(git:*)` |
+| `user-invocable: false` | Hide from slash menu                         |
 
 ## Skill Archetypes
 
 Use the templates in `assets/templates/` as starting points:
 
-### CLI Reference Skill
-**Template:** [assets/templates/cli-reference.md](assets/templates/cli-reference.md)
-
-For tools with commands, flags, and workflows. Structure: Auth → Core CRUD → Workflows → Errors.
-
-### Methodology Skill
-**Template:** [assets/templates/methodology.md](assets/templates/methodology.md)
-
-For processes, principles, and approaches. Structure: Philosophy → Steps → Before/After → Checklist.
-
-### Safety/Security Skill
-**Template:** [assets/templates/safety-tool.md](assets/templates/safety-tool.md)
-
-For validation, guardrails, and risk management. Structure: Threat Model → Block/Allow → Risk Tiers → Escalation.
+- **CLI Reference** — [assets/templates/cli-reference.md](assets/templates/cli-reference.md): Commands, flags, workflows. Structure: Auth → Core CRUD → Workflows → Errors.
+- **Methodology** — [assets/templates/methodology.md](assets/templates/methodology.md): Processes, principles. Structure: Philosophy → Steps → Before/After → Checklist.
+- **Safety/Security** — [assets/templates/safety-tool.md](assets/templates/safety-tool.md): Validation, guardrails. Structure: Threat Model → Block/Allow → Risk Tiers → Escalation.
 
 ## Example: Complete Minimal Skill
 
-```markdown
+````markdown
 ---
 name: generating-changelogs
 description: >-
@@ -285,14 +158,15 @@ description: >-
 ```bash
 git log --oneline v1.0.0..HEAD --format="- %s"
 ```
+````
 
 ## Conventional commit types
 
-| Type | Section |
-|------|---------|
-| feat | Features |
-| fix | Bug Fixes |
-| docs | Documentation |
+| Type     | Section          |
+| -------- | ---------------- |
+| feat     | Features         |
+| fix      | Bug Fixes        |
+| docs     | Documentation    |
 | refactor | Code Refactoring |
 
 ## Output format
@@ -302,8 +176,13 @@ ALWAYS use this structure:
 ## [Version] - YYYY-MM-DD
 
 ### Features
+
 - feat descriptions
 
 ### Bug Fixes
+
 - fix descriptions
+
+```
+
 ```

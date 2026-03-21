@@ -2,3 +2,13 @@
 *.swp
 *.swo
 *~
+
+# Credentials and secrets — never commit real env files
+*.env
+.env
+.env.*
+telegram.env
+*.pem
+*.p12
+*.pfx
+*.key

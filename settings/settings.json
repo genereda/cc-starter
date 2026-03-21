@@ -1,12 +1,49 @@
 {
+  "env": {
+    "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "1"
+  },
   "includeCoAuthoredBy": false,
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/protect-sensitive.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/auto-format.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/bash-audit.sh"
+          }
+        ]
+      }
+    ]
+  },
   "enabledPlugins": {
     "feature-dev@claude-plugins-official": true,
     "code-review@claude-plugins-official": true,
     "security-guidance@claude-plugins-official": true,
     "playwright@claude-plugins-official": true,
     "code-simplifier@claude-plugins-official": true,
-    "frontend-design@claude-plugins-official": true
+    "frontend-design@claude-plugins-official": true,
+    "clangd-lsp@claude-plugins-official": true
   },
   "gitAttribution": false
 }

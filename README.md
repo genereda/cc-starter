@@ -22,13 +22,15 @@ After installing, open any project and start a Claude Code session. The new inst
 
 ## What's Inside
 
-The kit has three main pieces:
+The kit has four main pieces:
 
 1. **`claude-md/CLAUDE.md`** -- A global instructions template that shapes how Claude behaves across all sessions: planning before coding, using subagents for delegation, committing in logical chunks, managing context, and more.
 
-2. **`settings/settings.json`** -- Recommended plugin configuration. Enables useful official plugins (Playwright for browser testing, code review, security guidance, frontend design) and sets sensible defaults.
+2. **`settings/settings.json`** -- Recommended settings including plugin configuration and hook wiring. Enables useful official plugins (Playwright for browser testing, code review, security guidance, frontend design) and configures hooks for file protection, auto-formatting, and command auditing.
 
-3. **`skills/`** -- Ten specialized knowledge modules Claude can load on demand. Each one makes Claude an expert in a specific domain -- from browser debugging to React performance to web security to generating visual diagrams.
+3. **`hooks/`** -- Shell scripts that run automatically on tool events. Three production hooks are included: sensitive file protection, auto-formatting, and bash command auditing. Example Telegram notification hooks are in `examples/hooks/`.
+
+4. **`skills/`** -- Ten specialized knowledge modules Claude can load on demand. Each one makes Claude an expert in a specific domain -- from browser debugging to React performance to web security to generating visual diagrams.
 
 ---
 
@@ -83,6 +85,92 @@ For complex tasks, enter plan mode by pressing `Shift+Tab` twice. In plan mode, 
 
 The `CLAUDE.md` template enforces this by default: Claude starts every non-trivial task in plan mode and waits for your approval before implementing.
 
+### Hooks
+
+Hooks are shell scripts that run automatically when Claude uses specific tools. They are configured in `settings.json` and fire on events like `PreToolUse` (before a tool runs) and `PostToolUse` (after a tool runs). Each hook receives JSON on stdin describing the tool invocation.
+
+This kit includes three production hooks:
+
+| Hook                     | Event                    | What It Does                                                                                                                                 |
+| ------------------------ | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **protect-sensitive.sh** | PreToolUse (Edit/Write)  | Blocks edits to SSH private keys. Warns on .env files, credentials, and CI/CD workflows. Supports per-project protection lists.              |
+| **auto-format.sh**       | PostToolUse (Edit/Write) | Runs Prettier (JS/TS/CSS/JSON/HTML/YAML/MD), Ruff (Python), or SwiftFormat (Swift) after every file edit. Skips vendor dirs and large files. |
+| **bash-audit.sh**        | PostToolUse (Bash)       | Logs every bash command to `~/.claude/bash-audit.log` with timestamp, session ID, project, and command. Auto-rotates at 10 MB.               |
+
+The `examples/hooks/` directory includes templates for Telegram notifications (get notified on your phone when Claude needs attention or finishes a task).
+
+#### Writing custom hooks
+
+Hooks are regular shell scripts. They receive a JSON payload on stdin with fields like `tool_name`, `tool_input`, `cwd`, and `session_id`. The exit code controls behavior:
+
+- **Exit 0** -- Allow the tool call. Any stdout text is shown to Claude as a warning or notice.
+- **Exit 2** -- Block the tool call. Stderr is shown as the reason.
+
+A minimal hook that logs file edits:
+
+```bash
+#!/usr/bin/env bash
+INPUT=$(cat)
+FILE=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
+[ -z "$FILE" ] && exit 0
+echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $FILE" >> ~/.claude/edit-log.txt
+exit 0
+```
+
+Wire it into `settings.json` under the appropriate event and matcher:
+
+```json
+"PostToolUse": [{
+  "matcher": "Edit|Write",
+  "hooks": [{ "type": "command", "command": "~/.claude/hooks/my-hook.sh" }]
+}]
+```
+
+Set `"async": true` for hooks that should not block Claude (e.g., notifications).
+
+---
+
+## Plugins
+
+The `settings.json` enables seven official Claude Code plugins. Each is included for a specific reason:
+
+| Plugin                | Why It's Included                                                                                                                                                                      |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **feature-dev**       | Guided feature development workflow with codebase exploration, architecture planning, and implementation tracking. Useful for non-trivial features where you want structured progress. |
+| **code-review**       | Automated code review that catches bugs, logic errors, and style issues. Runs on PRs or on demand.                                                                                     |
+| **security-guidance** | Flags common security vulnerabilities (OWASP top 10) during development. Catches issues before they ship.                                                                              |
+| **playwright**        | Headless browser automation for end-to-end testing. The default browser testing tool — fully autonomous, no GUI prompts needed.                                                        |
+| **code-simplifier**   | Reviews recently changed code for unnecessary complexity, duplication, and refactoring opportunities.                                                                                  |
+| **frontend-design**   | Generates polished, production-grade frontend interfaces. Avoids generic AI-generated aesthetics.                                                                                      |
+| **clangd-lsp**        | Language server for C/C++ projects. **Disable this if you don't work with C/C++** — it adds no value for other languages.                                                              |
+
+**Not included** (useful but require personal setup):
+
+- **telegram** -- Telegram bot integration. Requires a bot token and chat ID. See `examples/hooks/` for a simpler hook-based alternative.
+- **claude-hud** -- Third-party status line plugin. Personal preference.
+- **swift-lsp** -- Swift language server. Enable if you work with Swift/iOS projects.
+- **github** -- GitHub integration. Enable if you want deeper GitHub PR/issue integration.
+
+To enable or disable a plugin, edit `~/.claude/settings.json` and set the plugin key to `true` or `false`:
+
+```json
+"enabledPlugins": {
+  "clangd-lsp@claude-plugins-official": false
+}
+```
+
+---
+
+## Settings Reference
+
+The `settings.json` includes several non-obvious configuration keys:
+
+| Key                                    | Value   | What It Does                                                                                                                         |
+| -------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION` | `"1"`   | Enables suggested follow-up prompts after Claude responds, making it easier to continue a conversation without typing from scratch.  |
+| `includeCoAuthoredBy`                  | `false` | Prevents adding "Co-authored-by: Claude" trailers to git commits. Set to `true` if your team wants AI attribution in commit history. |
+| `gitAttribution`                       | `false` | Disables automatic git attribution metadata. Same rationale as above — enable if you want transparency about AI-assisted commits.    |
+
 ---
 
 ## Skills Inventory
@@ -106,12 +194,34 @@ The `CLAUDE.md` template enforces this by default: Claude starts every non-trivi
 
 ## Customizing
 
-This kit is a starting point, not a finished product. Make it your own:
+This kit is a starting point, not a finished product. Here is how to make each piece your own:
 
-- **Edit `CLAUDE.md`** to reflect your workflow preferences. Change the commit style, adjust the planning requirements, add your preferred tech stack conventions.
-- **Add project-specific sections** for deployment targets, infrastructure details, CI/CD pipelines, or team conventions.
-- **Create your own skills** for tools and workflows you use repeatedly. If you find yourself giving Claude the same context over and over, that is a skill waiting to be written.
-- **Check `examples/`** for inspiration. The `firewalla-ssh` example shows a skill for managing a specific network device. The `local-test` example shows a skill for a Docker-based testing environment that mirrors a production server. The `sample-project-claude-md.md` file shows what a project-level CLAUDE.md looks like in practice.
+### CLAUDE.md
+
+The template has these sections, each independently useful:
+
+- **Planning & PRD** -- Core workflow. Keep this unless you prefer Claude to code without a plan.
+- **Subagent Strategy** -- Delegation patterns. Keep this — it significantly improves Claude's effectiveness on complex tasks.
+- **Context Management** -- Tips Claude follows to avoid filling its context window. Keep this.
+- **Quality Standards** -- Testing, accuracy, and verification requirements. Customize the browser testing tools to match what you have installed.
+- **Workflow Patterns** -- Git discipline, model selection. Adjust commit style and branching strategy to match your team's conventions.
+- **Behavioral Rules** -- Communication preferences. Add or remove rules based on what annoys you.
+- **Deployment & Infrastructure** -- Empty placeholder. Fill this in with your own server details, CI/CD setup, and deploy process.
+
+### Hooks
+
+- To disable a hook, remove its entry from `settings.json` (or delete the script from `~/.claude/hooks/`).
+- To modify behavior, edit the script directly — they are plain bash.
+- `protect-sensitive.sh` supports per-project protection lists: create `.claude/protected-files.txt` in any project with glob patterns (one per line) for files that need confirmation before editing.
+- `auto-format.sh` requires the formatters to be installed (`prettier`, `ruff`, `swiftformat`). If a formatter is missing, the hook silently skips — it never blocks Claude.
+
+### Plugins
+
+Disable any plugin you do not use. Claude loads enabled plugins into its context window, so unnecessary plugins waste space. See the [Plugins](#plugins) section above for which ones to keep.
+
+### Skills
+
+Delete skill directories you will not use. Create new ones for tools and workflows you use repeatedly — if you find yourself giving Claude the same context over and over, that is a skill waiting to be written. Check `examples/` for inspiration on writing infrastructure and device-specific skills.
 
 ---
 
@@ -194,6 +304,7 @@ It will verify name format, description quality, body length, and common anti-pa
 
 The `examples/` directory contains real-world references:
 
+- **`hooks/`** -- Telegram notification hooks. `notify-telegram.sh` sends a DM when Claude needs attention (permission prompts, idle, task complete). `cdp-notify.sh` alerts you when Chrome debugging approval is needed. Includes `telegram.env.example` for setup.
 - **`firewalla-ssh/`** -- A skill for SSH access to a Firewalla router, including UniFi controller management and MongoDB queries. Shows how to document device-specific workflows.
 - **`local-test/`** -- A skill for a Docker Compose testing environment that mirrors a production VPS. Shows how to document infrastructure with verification checklists.
 - **`sample-project-claude-md.md`** -- A complete project-level CLAUDE.md for a real codebase. Use it as a template for your own projects.

@@ -1,6 +1,13 @@
 ---
 name: chrome-cdp
-description: Interact with local Chrome browser session (only on explicit user approval after being asked to inspect, debug, or interact with a page open in Chrome)
+description: >
+  Inspect the user's live Chrome session — real cookies, logged-in state, existing tabs.
+  Primary use: when the user explicitly asks to inspect their browser.
+  Fallback use: when Playwright cannot access a resource (auth-walled page, page that won't
+  render headless, or content only available in the user's live session).
+  Requires user to click "Allow debugging" per tab — a notification is sent automatically
+  when chrome-cdp is invoked so the user knows to approve the prompt.
+  Default to Playwright for autonomous self-testing of code you just wrote.
 ---
 
 # Chrome CDP
@@ -9,8 +16,10 @@ Lightweight Chrome DevTools Protocol CLI. Connects directly via WebSocket — no
 
 ## Prerequisites
 
-- Chrome with remote debugging enabled: open `chrome://inspect/#remote-debugging` and toggle the switch
+- Chrome with remote debugging enabled: open `chrome://inspect/#remote-debugging` and toggle the switch (persists across restarts)
 - Node.js 22+ (uses built-in WebSocket)
+
+> **Note:** `--remote-debugging-port` does not work on modern macOS Chrome. Use the `chrome://inspect` toggle instead.
 
 ## Commands
 
@@ -25,7 +34,7 @@ scripts/cdp.mjs list
 ### Take a screenshot
 
 ```bash
-scripts/cdp.mjs shot <target> [file]    # default: /tmp/screenshot.png
+scripts/cdp.mjs shot <target> [file]    # default: screenshot-<target>.png in runtime dir
 ```
 
 Captures the **viewport only**. Scroll first with `eval` if you need content below the fold. Output includes the page's DPR and coordinate conversion hint (see **Coordinates** below).
@@ -55,6 +64,7 @@ scripts/cdp.mjs clickxy <target> <x> <y>       # click at CSS pixel coords
 scripts/cdp.mjs type    <target> <text>         # Input.insertText at current focus; works in cross-origin iframes unlike eval
 scripts/cdp.mjs loadall <target> <selector> [ms]  # click "load more" until gone (default 1500ms between clicks)
 scripts/cdp.mjs evalraw <target> <method> [json]  # raw CDP command passthrough
+scripts/cdp.mjs open    [url]                  # open new tab (each triggers Allow prompt)
 scripts/cdp.mjs stop    [target]               # stop daemon(s)
 ```
 

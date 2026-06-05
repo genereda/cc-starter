@@ -2,12 +2,10 @@
 name: chrome-cdp
 description: >
   Inspect the user's live Chrome session — real cookies, logged-in state, existing tabs.
-  Primary use: when the user explicitly asks to inspect their browser.
-  Fallback use: when Playwright cannot access a resource (auth-walled page, page that won't
-  render headless, or content only available in the user's live session).
+  DEPRECATED in favour of browser-harness — use browser-harness for all live Chrome
+  interaction. Only fall back to chrome-cdp if browser-harness is unavailable or broken.
   Requires user to click "Allow debugging" per tab — a notification is sent automatically
   when chrome-cdp is invoked so the user knows to approve the prompt.
-  Default to Playwright for autonomous self-testing of code you just wrote.
 ---
 
 # Chrome CDP
